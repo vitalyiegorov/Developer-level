@@ -116,10 +116,55 @@ class GitHubAnalyzer {
                 activeDays: new Set(),
                 tasks: [],
                 firstActivity: null,
-                lastActivity: null
+                lastActivity: null,
+                // Task type breakdown
+                tasksByType: {
+                    bugfix: { created: 0, merged: 0, reviewed: 0 },
+                    feature: { created: 0, merged: 0, reviewed: 0 },
+                    refactor: { created: 0, merged: 0, reviewed: 0 },
+                    docs: { created: 0, merged: 0, reviewed: 0 },
+                    other: { created: 0, merged: 0, reviewed: 0 }
+                }
             });
         }
         return this.developers.get(login);
+    }
+
+    categorizeTask(title, labels = []) {
+        const titleLower = title.toLowerCase();
+        const labelNames = labels.map(l => (l.name || l).toLowerCase());
+
+        // Bug fix patterns
+        const bugPatterns = ['fix', 'bug', 'hotfix', 'patch', 'issue', 'error', 'crash', 'broken'];
+        if (bugPatterns.some(p => titleLower.includes(p)) ||
+            labelNames.some(l => l.includes('bug') || l.includes('fix'))) {
+            return 'bugfix';
+        }
+
+        // Feature patterns
+        const featurePatterns = ['feat', 'add', 'new', 'implement', 'support', 'enable', 'introduce'];
+        if (featurePatterns.some(p => titleLower.includes(p)) ||
+            labelNames.some(l => l.includes('feature') || l.includes('enhancement'))) {
+            return 'feature';
+        }
+
+        // Refactor/Tech debt patterns
+        const refactorPatterns = ['refactor', 'cleanup', 'clean up', 'improve', 'optimize', 'perf',
+                                   'tech debt', 'technical debt', 'chore', 'upgrade', 'update dep',
+                                   'migrate', 'restructure', 'simplify'];
+        if (refactorPatterns.some(p => titleLower.includes(p)) ||
+            labelNames.some(l => l.includes('refactor') || l.includes('tech') || l.includes('chore'))) {
+            return 'refactor';
+        }
+
+        // Documentation patterns
+        const docsPatterns = ['doc', 'readme', 'comment', 'typo', 'spelling', 'grammar'];
+        if (docsPatterns.some(p => titleLower.includes(p)) ||
+            labelNames.some(l => l.includes('doc'))) {
+            return 'docs';
+        }
+
+        return 'other';
     }
 
     updateActivityDate(dev, date) {
@@ -189,14 +234,20 @@ class GitHubAnalyzer {
                 const dev = this.getDeveloper(pr.user.login, pr.user.avatar_url);
                 dev.prsCreated++;
 
+                // Categorize by task type
+                const taskType = this.categorizeTask(pr.title, pr.labels || []);
+                dev.tasksByType[taskType].created++;
+
                 if (pr.merged_at) {
                     dev.prsMerged++;
+                    dev.tasksByType[taskType].merged++;
                 }
 
                 this.updateActivityDate(dev, pr.created_at);
 
                 dev.tasks.push({
                     type: 'pr',
+                    taskType: taskType,
                     title: pr.title,
                     number: pr.number,
                     state: pr.state,
@@ -243,15 +294,20 @@ class GitHubAnalyzer {
 
                 const reviews = await response.json();
 
+                // Categorize the PR being reviewed
+                const taskType = this.categorizeTask(pr.title, pr.labels || []);
+
                 for (const review of reviews) {
                     if (review.user && review.user.login &&
                         new Date(review.submitted_at) >= new Date(this.sinceDate)) {
                         const dev = this.getDeveloper(review.user.login, review.user.avatar_url);
                         dev.prsReviewed++;
+                        dev.tasksByType[taskType].reviewed++;
                         this.updateActivityDate(dev, review.submitted_at);
 
                         dev.tasks.push({
                             type: 'review',
+                            taskType: taskType,
                             title: `Review on PR #${pr.number}: ${pr.title}`,
                             number: pr.number,
                             state: review.state
@@ -387,6 +443,31 @@ class GitHubAnalyzer {
             // Determine M-level based on matrix
             const mLevel = this.calculateMLevel(abilityLevel, engagementLevel);
 
+            // Calculate M-level per task type
+            const taskTypeMetrics = {};
+            for (const [taskType, counts] of Object.entries(dev.tasksByType)) {
+                const total = counts.created + counts.reviewed;
+                if (total > 0) {
+                    // Ability for this task type based on merged PRs and reviews
+                    const typeAbility = Math.min((counts.merged * 3 + counts.reviewed * 2) / 10, 1) * 100;
+                    // Engagement based on activity volume
+                    const typeEngagement = Math.min(total / 5, 1) * 100;
+
+                    const typeAbilityLevel = this.normalizeToLevel(typeAbility);
+                    const typeEngagementLevel = this.normalizeToLevel(typeEngagement);
+
+                    taskTypeMetrics[taskType] = {
+                        created: counts.created,
+                        merged: counts.merged,
+                        reviewed: counts.reviewed,
+                        total: total,
+                        abilityScore: Math.round(typeAbility),
+                        engagementScore: Math.round(typeEngagement),
+                        mLevel: this.calculateMLevel(typeAbilityLevel, typeEngagementLevel)
+                    };
+                }
+            }
+
             results.push({
                 login: dev.login,
                 avatarUrl: dev.avatarUrl,
@@ -407,7 +488,8 @@ class GitHubAnalyzer {
                     linesAdded: dev.linesAdded,
                     linesDeleted: dev.linesDeleted
                 },
-                tasks: dev.tasks.slice(0, 5) // Top 5 tasks
+                tasksByType: taskTypeMetrics,
+                tasks: dev.tasks.slice(0, 10) // Top 10 tasks
             });
         }
 
@@ -798,8 +880,85 @@ class Dashboard {
 
     renderResults(developers) {
         this.renderMatrix(developers);
+        this.renderTaskTypeSummary(developers);
         this.renderTable(developers);
         this.renderActivityCards(developers);
+    }
+
+    renderTaskTypeSummary(developers) {
+        const container = document.getElementById('task-type-summary');
+        if (!container) return;
+
+        // Aggregate data by task type
+        const taskTypes = {
+            bugfix: { name: 'Bug Fixes', icon: '🐛', created: 0, merged: 0, reviewed: 0, developers: [] },
+            feature: { name: 'Features', icon: '✨', created: 0, merged: 0, reviewed: 0, developers: [] },
+            refactor: { name: 'Refactoring', icon: '🔧', created: 0, merged: 0, reviewed: 0, developers: [] },
+            docs: { name: 'Documentation', icon: '📚', created: 0, merged: 0, reviewed: 0, developers: [] },
+            other: { name: 'Other', icon: '📦', created: 0, merged: 0, reviewed: 0, developers: [] }
+        };
+
+        for (const dev of developers) {
+            if (!dev.tasksByType) continue;
+
+            for (const [type, metrics] of Object.entries(dev.tasksByType)) {
+                if (taskTypes[type] && metrics.total > 0) {
+                    taskTypes[type].created += metrics.created;
+                    taskTypes[type].merged += metrics.merged;
+                    taskTypes[type].reviewed += metrics.reviewed;
+                    taskTypes[type].developers.push({
+                        login: dev.login,
+                        avatarUrl: dev.avatarUrl,
+                        mLevel: metrics.mLevel,
+                        total: metrics.total
+                    });
+                }
+            }
+        }
+
+        // Sort developers by total activity within each type
+        for (const type of Object.values(taskTypes)) {
+            type.developers.sort((a, b) => b.total - a.total);
+        }
+
+        container.innerHTML = Object.entries(taskTypes)
+            .filter(([_, data]) => data.created + data.reviewed > 0)
+            .map(([type, data]) => `
+                <div class="task-type-card ${type}">
+                    <div class="task-type-header">
+                        <div class="task-type-name">
+                            <span class="task-type-icon ${type}">${data.icon}</span>
+                            ${data.name}
+                        </div>
+                    </div>
+                    <div class="task-type-stats">
+                        <div class="task-stat">
+                            <div class="task-stat-value">${data.created}</div>
+                            <div class="task-stat-label">Created</div>
+                        </div>
+                        <div class="task-stat">
+                            <div class="task-stat-value">${data.merged}</div>
+                            <div class="task-stat-label">Merged</div>
+                        </div>
+                        <div class="task-stat">
+                            <div class="task-stat-value">${data.reviewed}</div>
+                            <div class="task-stat-label">Reviewed</div>
+                        </div>
+                    </div>
+                    <div class="task-type-developers">
+                        <h4>Top Contributors</h4>
+                        <div class="task-dev-list">
+                            ${data.developers.slice(0, 5).map(dev => `
+                                <div class="task-dev-item">
+                                    <img src="${dev.avatarUrl}" alt="${dev.login}">
+                                    <span>${dev.login}</span>
+                                    <span class="level-badge ${dev.mLevel.toLowerCase()}">${dev.mLevel}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `).join('');
     }
 
     renderMatrix(developers) {
@@ -848,12 +1007,34 @@ class Dashboard {
         return `${mLevel}-${abilityStr}-${engagementStr}`;
     }
 
+    getTaskTypeLabel(type) {
+        const labels = {
+            bugfix: '🐛 Bug',
+            feature: '✨ Feature',
+            refactor: '🔧 Refactor',
+            docs: '📚 Docs',
+            other: '📦 Other'
+        };
+        return labels[type] || type;
+    }
+
     renderTable(developers) {
         const tbody = document.getElementById('developers-tbody');
         tbody.innerHTML = '';
 
         for (const dev of developers) {
             const row = document.createElement('tr');
+
+            // Build task type badges with M-levels
+            const taskTypeBadges = dev.tasksByType ?
+                Object.entries(dev.tasksByType)
+                    .filter(([_, m]) => m.total > 0)
+                    .map(([type, m]) => `
+                        <span class="task-category-badge ${type}">
+                            ${this.getTaskTypeLabel(type)}
+                            <span class="level-badge ${m.mLevel.toLowerCase()}">${m.mLevel}</span>
+                        </span>
+                    `).join('') : '';
 
             row.innerHTML = `
                 <td>
@@ -862,13 +1043,15 @@ class Dashboard {
                 </td>
                 <td>
                     <ul class="task-list">
-                        ${dev.tasks.map(task => `
+                        ${dev.tasks.slice(0, 6).map(task => `
                             <li>
-                                <span class="task-type ${task.type}">${task.type.toUpperCase()}</span>
-                                #${task.number}: ${this.truncate(task.title, 40)}
+                                <span class="task-type ${task.taskType || task.type}">${task.type === 'review' ? '👀' : '📝'}</span>
+                                <span class="task-category-tag ${task.taskType || 'other'}">${this.getTaskTypeLabel(task.taskType || 'other')}</span>
+                                #${task.number}: ${this.truncate(task.title, 30)}
                             </li>
                         `).join('')}
                         ${dev.tasks.length === 0 ? '<li>No recent tasks</li>' : ''}
+                        ${dev.tasks.length > 6 ? `<li class="more-tasks">+${dev.tasks.length - 6} more</li>` : ''}
                     </ul>
                 </td>
                 <td>
@@ -885,6 +1068,9 @@ class Dashboard {
                 </td>
                 <td>
                     <span class="level-badge ${dev.mLevel.toLowerCase()}">${dev.mLevel}</span>
+                    <div class="task-type-levels">
+                        ${taskTypeBadges}
+                    </div>
                 </td>
                 <td>
                     <ul class="metrics-list">

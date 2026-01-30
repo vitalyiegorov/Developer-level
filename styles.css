@@ -536,6 +536,144 @@ header .subtitle {
     background: rgba(37, 99, 235, 0.1);
 }
 
+/* Task Type Summary Section */
+.task-summary-section {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.task-summary-section h2 {
+    margin-bottom: 5px;
+    color: #2c5aa0;
+}
+
+.section-subtitle {
+    color: #64748b;
+    font-size: 0.9rem;
+    margin-bottom: 20px;
+}
+
+.task-type-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+}
+
+.task-type-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 20px;
+    border-left: 4px solid #2c5aa0;
+}
+
+.task-type-card.bugfix { border-left-color: #dc2626; }
+.task-type-card.feature { border-left-color: #16a34a; }
+.task-type-card.refactor { border-left-color: #9333ea; }
+.task-type-card.docs { border-left-color: #0891b2; }
+.task-type-card.other { border-left-color: #64748b; }
+
+.task-type-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+
+.task-type-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: #1e293b;
+}
+
+.task-type-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1rem;
+}
+
+.task-type-icon.bugfix { background: #dc2626; }
+.task-type-icon.feature { background: #16a34a; }
+.task-type-icon.refactor { background: #9333ea; }
+.task-type-icon.docs { background: #0891b2; }
+.task-type-icon.other { background: #64748b; }
+
+.task-type-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-bottom: 15px;
+}
+
+.task-stat {
+    text-align: center;
+    padding: 10px;
+    background: white;
+    border-radius: 6px;
+}
+
+.task-stat-value {
+    font-size: 1.3rem;
+    font-weight: 700;
+    color: #1e293b;
+}
+
+.task-stat-label {
+    font-size: 0.75rem;
+    color: #64748b;
+    text-transform: uppercase;
+}
+
+.task-type-developers {
+    border-top: 1px solid #e2e8f0;
+    padding-top: 15px;
+}
+
+.task-type-developers h4 {
+    font-size: 0.85rem;
+    color: #64748b;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+}
+
+.task-dev-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.task-dev-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: white;
+    padding: 4px 10px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    border: 1px solid #e2e8f0;
+}
+
+.task-dev-item img {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+}
+
+.task-dev-item .level-badge {
+    padding: 2px 6px;
+    font-size: 0.7rem;
+}
+
 /* Details Section */
 .details-section {
     background: white;
@@ -955,6 +1093,57 @@ footer {
         display: none;
     }
 
+    /* Task Summary Mobile */
+    .task-summary-section {
+        padding: 15px;
+    }
+
+    .task-summary-section h2 {
+        font-size: 1rem;
+    }
+
+    .task-type-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+
+    .task-type-card {
+        padding: 15px;
+    }
+
+    .task-type-stats {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+    }
+
+    .task-stat {
+        padding: 8px 5px;
+    }
+
+    .task-stat-value {
+        font-size: 1.1rem;
+    }
+
+    .task-dev-item {
+        font-size: 0.75rem;
+        padding: 3px 8px;
+    }
+
+    .task-dev-item img {
+        width: 16px;
+        height: 16px;
+    }
+
+    /* Task badges in table mobile */
+    .task-type-levels {
+        gap: 3px;
+    }
+
+    .task-category-badge {
+        font-size: 0.6rem;
+        padding: 2px 5px;
+    }
+
     /* Details Table Mobile */
     .details-section {
         padding: 15px;
@@ -1148,14 +1337,24 @@ footer {
 }
 
 .task-list li {
-    padding: 3px 0;
-    font-size: 0.85rem;
+    padding: 4px 0;
+    font-size: 0.8rem;
     color: #555;
     border-bottom: 1px dashed #eee;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-wrap: wrap;
 }
 
 .task-list li:last-child {
     border-bottom: none;
+}
+
+.task-list li.more-tasks {
+    color: #64748b;
+    font-style: italic;
+    font-size: 0.75rem;
 }
 
 .task-type {
@@ -1163,9 +1362,55 @@ footer {
     padding: 1px 5px;
     border-radius: 3px;
     font-size: 0.7rem;
-    margin-right: 5px;
+    margin-right: 3px;
 }
 
 .task-type.issue { background: #daf5da; color: #1a7f1a; }
 .task-type.pr { background: #e0e7ff; color: #4338ca; }
 .task-type.review { background: #fef3c7; color: #92400e; }
+
+/* Task category tags */
+.task-category-tag {
+    display: inline-block;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 0.65rem;
+    font-weight: 500;
+}
+
+.task-category-tag.bugfix { background: #fee2e2; color: #dc2626; }
+.task-category-tag.feature { background: #dcfce7; color: #16a34a; }
+.task-category-tag.refactor { background: #f3e8ff; color: #9333ea; }
+.task-category-tag.docs { background: #cffafe; color: #0891b2; }
+.task-category-tag.other { background: #f1f5f9; color: #64748b; }
+
+/* Task type levels in table */
+.task-type-levels {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.task-category-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+}
+
+.task-category-badge.bugfix { border-color: #fecaca; background: #fef2f2; }
+.task-category-badge.feature { border-color: #bbf7d0; background: #f0fdf4; }
+.task-category-badge.refactor { border-color: #e9d5ff; background: #faf5ff; }
+.task-category-badge.docs { border-color: #a5f3fc; background: #ecfeff; }
+.task-category-badge.other { border-color: #e2e8f0; background: #f8fafc; }
+
+.task-category-badge .level-badge {
+    padding: 1px 4px;
+    font-size: 0.6rem;
+}
