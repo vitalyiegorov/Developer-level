@@ -347,6 +347,11 @@ class GitHubAnalyzer {
                 continue;
             }
 
+            // Skip developers with no PR activity (neither created nor reviewed)
+            if (dev.prsCreated === 0 && dev.prsReviewed === 0) {
+                continue;
+            }
+
             // Calculate Ability Score (based on code output and quality indicators)
             const abilityFactors = {
                 commits: Math.min(dev.commits / 30, 1) * 20,           // Up to 20 points
@@ -531,6 +536,8 @@ class Dashboard {
         this.loadingSection = document.getElementById('loading');
         this.resultsSection = document.getElementById('results');
         this.analyzeBtn = document.getElementById('analyze-btn');
+        this.currentDevelopers = [];
+        this.currentRepoInfo = { owner: '', repo: '' };
 
         this.bindEvents();
     }
@@ -540,6 +547,83 @@ class Dashboard {
             e.preventDefault();
             this.analyze();
         });
+
+        // Export buttons
+        document.getElementById('export-pdf-btn')?.addEventListener('click', () => {
+            this.exportPDF();
+        });
+
+        document.getElementById('export-csv-btn')?.addEventListener('click', () => {
+            this.exportCSV();
+        });
+    }
+
+    exportPDF() {
+        // Use browser print functionality with print styles
+        const title = document.title;
+        document.title = `Developer Level Report - ${this.currentRepoInfo.owner}/${this.currentRepoInfo.repo}`;
+        window.print();
+        document.title = title;
+    }
+
+    exportCSV() {
+        if (this.currentDevelopers.length === 0) {
+            alert('No data to export');
+            return;
+        }
+
+        const headers = [
+            'Developer',
+            'Development Level',
+            'Ability Score',
+            'Ability Level',
+            'Engagement Score',
+            'Engagement Level',
+            'Commits',
+            'PRs Created',
+            'PRs Merged',
+            'PRs Reviewed',
+            'Review Comments',
+            'Issues Created',
+            'Issue Comments',
+            'Active Days',
+            'Lines Added',
+            'Lines Deleted'
+        ];
+
+        const rows = this.currentDevelopers.map(dev => [
+            dev.login,
+            dev.mLevel,
+            dev.abilityScore,
+            this.getLevelLabel(dev.abilityLevel),
+            dev.engagementScore,
+            this.getLevelLabel(dev.engagementLevel),
+            dev.metrics.commits,
+            dev.metrics.prsCreated,
+            dev.metrics.prsMerged,
+            dev.metrics.prsReviewed,
+            dev.metrics.reviewComments,
+            dev.metrics.issuesCreated,
+            dev.metrics.issueComments,
+            dev.metrics.activeDays,
+            dev.metrics.linesAdded,
+            dev.metrics.linesDeleted
+        ]);
+
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `developer-levels-${this.currentRepoInfo.owner}-${this.currentRepoInfo.repo}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
     }
 
     showLoading() {
@@ -588,6 +672,8 @@ class Dashboard {
                 return;
             }
 
+            this.currentDevelopers = results;
+            this.currentRepoInfo = { owner, repo };
             this.renderResults(results);
             this.showResults();
         } catch (error) {
