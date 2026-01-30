@@ -16,26 +16,90 @@
         <section class="config-section">
             <h2>GitHub Repository Configuration</h2>
             <form id="repo-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="owner">Repository Owner</label>
-                        <input type="text" id="owner" placeholder="e.g., facebook" required>
+                <!-- Repository Selection -->
+                <div class="form-card">
+                    <div class="form-card-header">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+                        </svg>
+                        <span>Repository</span>
                     </div>
-                    <div class="form-group">
-                        <label for="repo">Repository Name</label>
-                        <input type="text" id="repo" placeholder="e.g., react" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="token">GitHub Token (optional)</label>
-                        <input type="password" id="token" placeholder="For higher rate limits">
+                    <div class="form-row">
+                        <div class="form-group repo-input-group">
+                            <label for="repo-full">Repository (owner/name)</label>
+                            <div class="input-with-icon">
+                                <input type="text" id="repo-full" placeholder="e.g., ToolSense/frontend" list="recent-repos" autocomplete="off">
+                                <datalist id="recent-repos"></datalist>
+                            </div>
+                            <span class="form-hint">Enter as owner/repo or select from recent</span>
+                        </div>
                     </div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="days">Analysis Period (days)</label>
-                        <input type="number" id="days" value="90" min="7" max="365">
+
+                <!-- Time Period Selection -->
+                <div class="form-card">
+                    <div class="form-card-header">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                            <line x1="16" y1="2" x2="16" y2="6"></line>
+                            <line x1="8" y1="2" x2="8" y2="6"></line>
+                            <line x1="3" y1="10" x2="21" y2="10"></line>
+                        </svg>
+                        <span>Analysis Period</span>
                     </div>
-                    <button type="submit" id="analyze-btn">Analyze Repository</button>
+                    <div class="period-selector">
+                        <button type="button" class="period-btn" data-days="30">Last Month</button>
+                        <button type="button" class="period-btn active" data-days="90">Last Quarter</button>
+                        <button type="button" class="period-btn" data-days="180">Last 6 Months</button>
+                        <button type="button" class="period-btn" data-days="365">Last Year</button>
+                    </div>
+                    <input type="hidden" id="days" value="90">
+                </div>
+
+                <!-- Token Configuration -->
+                <div class="form-card">
+                    <div class="form-card-header">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                        </svg>
+                        <span>Authentication</span>
+                        <span class="badge optional">Optional</span>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group token-group">
+                            <label for="token">GitHub Personal Access Token</label>
+                            <div class="input-with-toggle">
+                                <input type="password" id="token" placeholder="ghp_xxxxxxxxxxxx">
+                                <button type="button" id="toggle-token" class="toggle-btn" title="Show/Hide token">
+                                    <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                        <circle cx="12" cy="12" r="3"></circle>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="token-options">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" id="remember-token">
+                                    <span>Remember token in this browser</span>
+                                </label>
+                            </div>
+                            <span class="form-hint">
+                                Required for private repos. <a href="https://github.com/settings/tokens/new?description=Developer%20Level%20Dashboard&scopes=repo" target="_blank">Create token</a>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Submit Button -->
+                <div class="form-actions">
+                    <button type="submit" id="analyze-btn" class="primary-btn">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <path d="m21 21-4.35-4.35"></path>
+                        </svg>
+                        Analyze Repository
+                    </button>
                 </div>
             </form>
         </section>

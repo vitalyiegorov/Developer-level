@@ -539,14 +539,85 @@ class Dashboard {
         this.currentDevelopers = [];
         this.currentRepoInfo = { owner: '', repo: '' };
 
+        this.loadSavedSettings();
         this.bindEvents();
     }
 
+    loadSavedSettings() {
+        // Load saved token if remember was checked
+        const savedToken = localStorage.getItem('gh_token');
+        const rememberToken = localStorage.getItem('gh_remember_token') === 'true';
+
+        if (savedToken && rememberToken) {
+            const tokenInput = document.getElementById('token');
+            const rememberCheckbox = document.getElementById('remember-token');
+            if (tokenInput) tokenInput.value = savedToken;
+            if (rememberCheckbox) rememberCheckbox.checked = true;
+        }
+
+        // Load recent repos
+        this.loadRecentRepos();
+    }
+
+    loadRecentRepos() {
+        const recentRepos = JSON.parse(localStorage.getItem('recent_repos') || '[]');
+        const datalist = document.getElementById('recent-repos');
+
+        if (datalist && recentRepos.length > 0) {
+            datalist.innerHTML = recentRepos
+                .map(repo => `<option value="${repo}">`)
+                .join('');
+        }
+    }
+
+    saveRecentRepo(repoFullName) {
+        let recentRepos = JSON.parse(localStorage.getItem('recent_repos') || '[]');
+
+        // Add to beginning, remove duplicates, limit to 10
+        recentRepos = [repoFullName, ...recentRepos.filter(r => r !== repoFullName)].slice(0, 10);
+
+        localStorage.setItem('recent_repos', JSON.stringify(recentRepos));
+        this.loadRecentRepos();
+    }
+
     bindEvents() {
+        // Form submission
         this.form.addEventListener('submit', (e) => {
             e.preventDefault();
             this.analyze();
         });
+
+        // Period selector buttons
+        document.querySelectorAll('.period-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById('days').value = btn.dataset.days;
+            });
+        });
+
+        // Token visibility toggle
+        const toggleBtn = document.getElementById('toggle-token');
+        const tokenInput = document.getElementById('token');
+
+        if (toggleBtn && tokenInput) {
+            toggleBtn.addEventListener('click', () => {
+                const isPassword = tokenInput.type === 'password';
+                tokenInput.type = isPassword ? 'text' : 'password';
+                toggleBtn.title = isPassword ? 'Hide token' : 'Show token';
+            });
+        }
+
+        // Remember token checkbox
+        const rememberCheckbox = document.getElementById('remember-token');
+        if (rememberCheckbox) {
+            rememberCheckbox.addEventListener('change', () => {
+                if (!rememberCheckbox.checked) {
+                    localStorage.removeItem('gh_token');
+                    localStorage.removeItem('gh_remember_token');
+                }
+            });
+        }
 
         // Export buttons
         document.getElementById('export-pdf-btn')?.addEventListener('click', () => {
@@ -630,13 +701,24 @@ class Dashboard {
         this.loadingSection.classList.remove('hidden');
         this.resultsSection.classList.add('hidden');
         this.analyzeBtn.disabled = true;
-        this.analyzeBtn.textContent = 'Analyzing...';
+        this.analyzeBtn.innerHTML = `
+            <svg class="spinner-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+            </svg>
+            Analyzing...
+        `;
     }
 
     hideLoading() {
         this.loadingSection.classList.add('hidden');
         this.analyzeBtn.disabled = false;
-        this.analyzeBtn.textContent = 'Analyze Repository';
+        this.analyzeBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"></circle>
+                <path d="m21 21-4.35-4.35"></path>
+            </svg>
+            Analyze Repository
+        `;
     }
 
     showResults() {
@@ -644,15 +726,35 @@ class Dashboard {
     }
 
     async analyze() {
-        const owner = document.getElementById('owner').value.trim();
-        const repo = document.getElementById('repo').value.trim();
+        // Parse repo input (supports "owner/repo" format)
+        const repoFullInput = document.getElementById('repo-full')?.value.trim() || '';
+        let owner = '';
+        let repo = '';
+
+        if (repoFullInput.includes('/')) {
+            [owner, repo] = repoFullInput.split('/').map(s => s.trim());
+        } else {
+            alert('Please enter repository in format: owner/repo (e.g., ToolSense/frontend)');
+            return;
+        }
+
         const token = document.getElementById('token').value.trim();
         const days = parseInt(document.getElementById('days').value) || 90;
 
         if (!owner || !repo) {
-            alert('Please enter repository owner and name');
+            alert('Please enter a valid repository (owner/repo)');
             return;
         }
+
+        // Save token if remember is checked
+        const rememberCheckbox = document.getElementById('remember-token');
+        if (rememberCheckbox?.checked && token) {
+            localStorage.setItem('gh_token', token);
+            localStorage.setItem('gh_remember_token', 'true');
+        }
+
+        // Save to recent repos
+        this.saveRecentRepo(`${owner}/${repo}`);
 
         this.showLoading();
 
@@ -665,8 +767,8 @@ class Dashboard {
                     'Possible reasons:\n' +
                     '- Repository has no recent commits/PRs/issues\n' +
                     '- Repository is private (add GitHub token)\n' +
-                    '- Try a longer time period\n' +
-                    '- Try a more active repository like "facebook/react"';
+                    '- Developers have no PR activity (create or review)\n' +
+                    '- Try a longer time period';
                 alert(msg);
                 this.hideLoading();
                 return;
@@ -680,10 +782,10 @@ class Dashboard {
             console.error('Analysis error:', error);
             let msg = error.message;
             if (msg.includes('404')) {
-                msg = `Repository "${owner}/${repo}" not found. Check the owner and repo name.`;
+                msg = `Repository "${owner}/${repo}" not found.\n\nCheck:\n- Owner and repo name are correct\n- For private repos, add a GitHub token with 'repo' scope`;
             } else if (msg.includes('rate limit') || msg.includes('403')) {
                 msg = 'GitHub API rate limit exceeded.\n\nSolutions:\n' +
-                    '1. Add a GitHub Personal Access Token (Settings > Developer settings > Personal access tokens)\n' +
+                    '1. Add a GitHub Personal Access Token\n' +
                     '2. Wait for rate limit to reset\n\n' +
                     'Without token: 60 requests/hour\n' +
                     'With token: 5000 requests/hour';
