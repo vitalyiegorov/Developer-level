@@ -13,6 +13,8 @@ class GitHubAnalyzer {
         this.baseUrl = 'https://api.github.com';
         this.sinceDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
         this.developers = new Map();
+        this.rateLimitRemaining = null;
+        this.rateLimitReset = null;
     }
 
     getHeaders() {
@@ -23,6 +25,16 @@ class GitHubAnalyzer {
             headers['Authorization'] = `token ${this.token}`;
         }
         return headers;
+    }
+
+    updateRateLimitInfo(response) {
+        this.rateLimitRemaining = parseInt(response.headers.get('X-RateLimit-Remaining')) || null;
+        this.rateLimitReset = parseInt(response.headers.get('X-RateLimit-Reset')) || null;
+
+        if (this.rateLimitRemaining !== null && this.rateLimitRemaining < 10) {
+            const resetTime = this.rateLimitReset ? new Date(this.rateLimitReset * 1000).toLocaleTimeString() : 'unknown';
+            this.updateStatus(`Warning: Only ${this.rateLimitRemaining} API calls remaining. Resets at ${resetTime}`);
+        }
     }
 
     async fetchPaginated(endpoint, params = {}) {
@@ -41,11 +53,17 @@ class GitHubAnalyzer {
 
             try {
                 const response = await fetch(url, { headers: this.getHeaders() });
+                this.updateRateLimitInfo(response);
 
                 if (!response.ok) {
                     if (response.status === 403) {
-                        console.warn('Rate limit exceeded, returning partial results');
+                        const resetTime = this.rateLimitReset ? new Date(this.rateLimitReset * 1000).toLocaleTimeString() : 'unknown';
+                        console.warn(`Rate limit exceeded. Resets at ${resetTime}`);
+                        this.updateStatus(`Rate limit hit! Resets at ${resetTime}. Add a GitHub token for higher limits.`);
                         break;
+                    }
+                    if (response.status === 404) {
+                        throw new Error(`Repository not found: ${this.owner}/${this.repo}`);
                     }
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
                 }
@@ -61,11 +79,11 @@ class GitHubAnalyzer {
                 page++;
 
                 // Limit pages to avoid excessive API calls
-                if (page > 10) break;
+                if (page > 5) break;
 
             } catch (error) {
                 console.error(`Error fetching ${endpoint}:`, error);
-                break;
+                throw error;
             }
         }
 
@@ -192,6 +210,8 @@ class GitHubAnalyzer {
 
     async fetchReviews() {
         this.updateStatus('Fetching PR reviews...');
+
+        // Use the pulls endpoint we already have data from, limit API calls
         const prs = await this.fetchPaginated(`/repos/${this.owner}/${this.repo}/pulls`, {
             state: 'all',
             sort: 'updated',
@@ -200,11 +220,28 @@ class GitHubAnalyzer {
 
         const recentPRs = prs.filter(pr => new Date(pr.updated_at) >= new Date(this.sinceDate));
 
-        for (const pr of recentPRs.slice(0, 50)) { // Limit to 50 PRs for reviews
+        // Limit to 20 PRs to save API calls
+        const prsToCheck = recentPRs.slice(0, 20);
+        this.updateStatus(`Fetching reviews for ${prsToCheck.length} recent PRs...`);
+
+        for (let i = 0; i < prsToCheck.length; i++) {
+            const pr = prsToCheck[i];
+            this.updateStatus(`Fetching reviews (${i + 1}/${prsToCheck.length})...`);
+
+            // Check rate limit before each call
+            if (this.rateLimitRemaining !== null && this.rateLimitRemaining < 5) {
+                this.updateStatus('Stopping review fetch to preserve rate limit...');
+                break;
+            }
+
             try {
-                const reviews = await this.fetchPaginated(
-                    `/repos/${this.owner}/${this.repo}/pulls/${pr.number}/reviews`
-                );
+                const url = `${this.baseUrl}/repos/${this.owner}/${this.repo}/pulls/${pr.number}/reviews`;
+                const response = await fetch(url, { headers: this.getHeaders() });
+                this.updateRateLimitInfo(response);
+
+                if (!response.ok) continue;
+
+                const reviews = await response.json();
 
                 for (const review of reviews) {
                     if (review.user && review.user.login &&
@@ -221,23 +258,28 @@ class GitHubAnalyzer {
                         });
                     }
                 }
-
-                // Fetch review comments
-                const comments = await this.fetchPaginated(
-                    `/repos/${this.owner}/${this.repo}/pulls/${pr.number}/comments`
-                );
-
-                for (const comment of comments) {
-                    if (comment.user && comment.user.login &&
-                        new Date(comment.created_at) >= new Date(this.sinceDate)) {
-                        const dev = this.getDeveloper(comment.user.login, comment.user.avatar_url);
-                        dev.reviewComments++;
-                        this.updateActivityDate(dev, comment.created_at);
-                    }
-                }
             } catch (e) {
                 console.warn(`Error fetching reviews for PR #${pr.number}:`, e);
             }
+        }
+
+        // Fetch review comments in bulk (more efficient)
+        this.updateStatus('Fetching review comments...');
+        try {
+            const comments = await this.fetchPaginated(
+                `/repos/${this.owner}/${this.repo}/pulls/comments`,
+                { since: this.sinceDate, sort: 'updated', direction: 'desc' }
+            );
+
+            for (const comment of comments) {
+                if (comment.user && comment.user.login) {
+                    const dev = this.getDeveloper(comment.user.login, comment.user.avatar_url);
+                    dev.reviewComments++;
+                    this.updateActivityDate(dev, comment.created_at);
+                }
+            }
+        } catch (e) {
+            console.warn('Error fetching review comments:', e);
         }
     }
 
@@ -417,13 +459,69 @@ class GitHubAnalyzer {
     async analyze() {
         this.updateStatus('Starting analysis...');
 
-        await this.fetchCommits();
-        await this.fetchPullRequests();
-        await this.fetchReviews();
-        await this.fetchIssues();
-        await this.fetchIssueComments();
+        // Check rate limit first
+        try {
+            const response = await fetch(`${this.baseUrl}/rate_limit`, { headers: this.getHeaders() });
+            if (response.ok) {
+                const data = await response.json();
+                const remaining = data.rate.remaining;
+                const limit = data.rate.limit;
+                this.rateLimitRemaining = remaining;
+                this.updateStatus(`API rate limit: ${remaining}/${limit} remaining`);
 
-        return this.calculateMetrics();
+                if (remaining < 20) {
+                    throw new Error(`Low API rate limit (${remaining} remaining). Please add a GitHub token or wait.`);
+                }
+            }
+        } catch (e) {
+            if (e.message.includes('Low API')) throw e;
+            console.warn('Could not check rate limit:', e);
+        }
+
+        let commitCount = 0, prCount = 0, issueCount = 0;
+
+        try {
+            commitCount = await this.fetchCommits();
+            this.updateStatus(`Found ${commitCount} commits, ${this.developers.size} developers so far...`);
+        } catch (e) {
+            console.error('Error fetching commits:', e);
+        }
+
+        try {
+            prCount = await this.fetchPullRequests();
+            this.updateStatus(`Found ${prCount} PRs, ${this.developers.size} developers so far...`);
+        } catch (e) {
+            console.error('Error fetching PRs:', e);
+        }
+
+        try {
+            await this.fetchReviews();
+        } catch (e) {
+            console.error('Error fetching reviews:', e);
+        }
+
+        try {
+            issueCount = await this.fetchIssues();
+            this.updateStatus(`Found ${issueCount} issues, ${this.developers.size} developers so far...`);
+        } catch (e) {
+            console.error('Error fetching issues:', e);
+        }
+
+        try {
+            await this.fetchIssueComments();
+        } catch (e) {
+            console.error('Error fetching comments:', e);
+        }
+
+        this.updateStatus(`Analyzing ${this.developers.size} developers...`);
+
+        const results = this.calculateMetrics();
+
+        if (results.length === 0 && this.developers.size === 0) {
+            throw new Error(`No activity found. Checked: ${commitCount} commits, ${prCount} PRs, ${issueCount} issues in last ${this.days} days.`);
+        }
+
+        return results;
     }
 }
 
@@ -479,7 +577,13 @@ class Dashboard {
             const results = await analyzer.analyze();
 
             if (results.length === 0) {
-                alert('No developer activity found in the specified period');
+                const msg = `No developer activity found for ${owner}/${repo} in the last ${days} days.\n\n` +
+                    'Possible reasons:\n' +
+                    '- Repository has no recent commits/PRs/issues\n' +
+                    '- Repository is private (add GitHub token)\n' +
+                    '- Try a longer time period\n' +
+                    '- Try a more active repository like "facebook/react"';
+                alert(msg);
                 this.hideLoading();
                 return;
             }
@@ -488,7 +592,17 @@ class Dashboard {
             this.showResults();
         } catch (error) {
             console.error('Analysis error:', error);
-            alert(`Error analyzing repository: ${error.message}`);
+            let msg = error.message;
+            if (msg.includes('404')) {
+                msg = `Repository "${owner}/${repo}" not found. Check the owner and repo name.`;
+            } else if (msg.includes('rate limit') || msg.includes('403')) {
+                msg = 'GitHub API rate limit exceeded.\n\nSolutions:\n' +
+                    '1. Add a GitHub Personal Access Token (Settings > Developer settings > Personal access tokens)\n' +
+                    '2. Wait for rate limit to reset\n\n' +
+                    'Without token: 60 requests/hour\n' +
+                    'With token: 5000 requests/hour';
+            }
+            alert(`Error: ${msg}`);
         } finally {
             this.hideLoading();
         }
