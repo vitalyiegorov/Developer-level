@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Developer Level Dashboard - GitHub Activity Analysis</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Development Level of Developers</h1>
+            <p class="subtitle">Based on GitHub Activity Analysis</p>
+        </header>
+
+        <section class="config-section">
+            <h2>GitHub Repository Configuration</h2>
+            <form id="repo-form">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="owner">Repository Owner</label>
+                        <input type="text" id="owner" placeholder="e.g., facebook" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="repo">Repository Name</label>
+                        <input type="text" id="repo" placeholder="e.g., react" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="token">GitHub Token (optional)</label>
+                        <input type="password" id="token" placeholder="For higher rate limits">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="days">Analysis Period (days)</label>
+                        <input type="number" id="days" value="90" min="7" max="365">
+                    </div>
+                    <button type="submit" id="analyze-btn">Analyze Repository</button>
+                </div>
+            </form>
+        </section>
+
+        <section id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Analyzing GitHub activity...</p>
+            <p class="loading-status" id="loading-status"></p>
+        </section>
+
+        <section id="results" class="results hidden">
+            <!-- Maturity Matrix -->
+            <div class="matrix-section">
+                <h2>Developer Maturity Matrix</h2>
+                <div class="matrix-container">
+                    <div class="matrix-y-label">
+                        <span>Abilities<br>(Skills)</span>
+                    </div>
+                    <div class="matrix-grid">
+                        <div class="matrix-y-axis">
+                            <span>High (3)</span>
+                            <span>Medium (2)</span>
+                            <span>Low (1)</span>
+                        </div>
+                        <div class="matrix-cells">
+                            <div class="matrix-row">
+                                <div class="matrix-cell m3" data-level="M3">
+                                    <span class="level-label">M 3</span>
+                                    <div class="developers-list" id="m3-high-low"></div>
+                                </div>
+                                <div class="matrix-cell m3" data-level="M3">
+                                    <span class="level-label">M 3</span>
+                                    <div class="developers-list" id="m3-high-med"></div>
+                                </div>
+                                <div class="matrix-cell m4" data-level="M4">
+                                    <span class="level-label">M 4</span>
+                                    <div class="developers-list" id="m4-high-high"></div>
+                                </div>
+                            </div>
+                            <div class="matrix-row">
+                                <div class="matrix-cell m1" data-level="M1">
+                                    <span class="level-label">M 1</span>
+                                    <div class="developers-list" id="m1-med-low"></div>
+                                </div>
+                                <div class="matrix-cell m2" data-level="M2">
+                                    <span class="level-label">M 2</span>
+                                    <div class="developers-list" id="m2-med-med"></div>
+                                </div>
+                                <div class="matrix-cell m2" data-level="M2">
+                                    <span class="level-label">M 2</span>
+                                    <div class="developers-list" id="m2-med-high"></div>
+                                </div>
+                            </div>
+                            <div class="matrix-row">
+                                <div class="matrix-cell m1" data-level="M1">
+                                    <span class="level-label">M 1</span>
+                                    <div class="developers-list" id="m1-low-low"></div>
+                                </div>
+                                <div class="matrix-cell m2" data-level="M2">
+                                    <span class="level-label">M 2</span>
+                                    <div class="developers-list" id="m2-low-med"></div>
+                                </div>
+                                <div class="matrix-cell m2" data-level="M2">
+                                    <span class="level-label">M 2</span>
+                                    <div class="developers-list" id="m2-low-high"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="matrix-x-axis">
+                            <span>Low 1</span>
+                            <span>Medium;<br>Changing 2</span>
+                            <span>High 3</span>
+                        </div>
+                    </div>
+                    <div class="matrix-x-label">Engagement</div>
+                </div>
+            </div>
+
+            <!-- Maturity Level Legend -->
+            <div class="legend-section">
+                <h2>Matching Level of Maturity and Leadership Style</h2>
+                <table class="legend-table">
+                    <thead>
+                        <tr>
+                            <th></th>
+                            <th>Maturity Level</th>
+                            <th>Leadership Style</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="m1-row">
+                            <td rowspan="2" class="activity-label">Boss<br>more active</td>
+                            <td><strong>M1</strong><br>low – medium ability<br>low engagement</td>
+                            <td><strong>S1 Telling</strong><br>conducting, managing, assigning, deciding, high control</td>
+                        </tr>
+                        <tr class="m2-row">
+                            <td><strong>M2</strong><br>low – medium ability<br>medium – high engagement</td>
+                            <td><strong>S2 Selling</strong><br>guiding, training, instructing, arguing, convincing</td>
+                        </tr>
+                        <tr class="m3-row">
+                            <td rowspan="2" class="activity-label">Employee<br>more active</td>
+                            <td><strong>M3</strong><br>high ability<br>low – medium engagement</td>
+                            <td><strong>S3 Coaching</strong><br>supporting, consulting, participative, help for self-help</td>
+                        </tr>
+                        <tr class="m4-row">
+                            <td><strong>M4</strong><br>high ability<br>high engagement</td>
+                            <td><strong>S4 Delegating</strong><br>much scope, long line, high degree of self-control, delegating</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Developer Details Table -->
+            <div class="details-section">
+                <h2>Development Level of Developers in Their Tasks</h2>
+                <div class="table-container">
+                    <table class="developers-table" id="developers-table">
+                        <thead>
+                            <tr>
+                                <th>Developer</th>
+                                <th>Main Tasks</th>
+                                <th>Abilities (Skills)</th>
+                                <th>Engagement</th>
+                                <th>Development Level</th>
+                                <th>Metrics</th>
+                            </tr>
+                        </thead>
+                        <tbody id="developers-tbody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Activity Breakdown -->
+            <div class="activity-section">
+                <h2>Activity Breakdown</h2>
+                <div id="activity-cards" class="activity-cards">
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <p>Development Level Assessment based on Situational Leadership Model</p>
+            <p class="attribution">Löwenstein Framework</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
